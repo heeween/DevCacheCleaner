@@ -19,6 +19,11 @@ final class CacheViewModel: ObservableObject {
     @Published var isScanningLargeFiles = false
     @Published var largeFileMinimumSizeGB: Double = 1.0
     @Published var largeFilePendingDeletion: LargeFileInfo?
+    @Published var dockerUsage: DockerUsage?
+    @Published var dockerServices: [DockerService] = []
+    @Published var isLoadingDocker = false
+    @Published var isCleaningDocker = false
+    @Published var dockerCleanupPending = false
 
     func analyzeAllCaches(preserveSelection: Bool = false) {
         guard !isAnalyzing else { return }
@@ -78,6 +83,57 @@ final class CacheViewModel: ObservableObject {
             handleCleanupResults(results)
             self.isCleaning = false
             self.analyzeAllCaches()
+        }
+    }
+
+    func refreshDocker() {
+        guard !isLoadingDocker else { return }
+        isLoadingDocker = true
+        lastError = nil
+
+        Task {
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    try DockerClient().inspect()
+                }.value
+                self.dockerUsage = result.usage
+                self.dockerServices = result.services
+            } catch {
+                self.dockerUsage = nil
+                self.dockerServices = []
+                self.lastError = error.localizedDescription
+            }
+            self.isLoadingDocker = false
+        }
+    }
+
+    func requestDockerCacheCleanup() {
+        dockerCleanupPending = true
+    }
+
+    func cancelDockerCacheCleanup() {
+        dockerCleanupPending = false
+    }
+
+    func confirmDockerCacheCleanup() {
+        guard !isCleaningDocker else { return }
+        dockerCleanupPending = false
+        isCleaningDocker = true
+        lastError = nil
+
+        Task {
+            do {
+                let freedSpace = try await Task.detached(priority: .userInitiated) {
+                    try DockerClient().pruneBuildCache()
+                }.value
+                self.toastMessage = freedSpace > 0
+                    ? "Docker 缓存已清理，释放 \(CacheFormatter.formatSize(freedSpace))"
+                    : "Docker 缓存清理完成"
+                self.refreshDocker()
+            } catch {
+                self.lastError = error.localizedDescription
+            }
+            self.isCleaningDocker = false
         }
     }
 

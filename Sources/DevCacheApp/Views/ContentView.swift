@@ -10,6 +10,7 @@ struct ContentView: View {
                 header
                 summaryCards
                 actionButtons
+                dockerSection
                 largeFilesSection
                 cacheTable
                 directoryInspectorSection
@@ -21,6 +22,7 @@ struct ContentView: View {
         .navigationTitle("DevCache Cleaner")
         .toolbar { toolbarButtons }
         .task { viewModel.analyzeAllCaches() }
+        .task { viewModel.refreshDocker() }
         .onChange(of: viewModel.selectedCacheIDs) { _ in
             viewModel.inspectFirstSelectedCache()
         }
@@ -103,10 +105,23 @@ struct ContentView: View {
                 Text(file.path)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
-                Text("大小 (CacheFormatter.formatSize(file.size)) · 删除后可从废纸篓恢复")
+                Text("大小 \(CacheFormatter.formatSize(file.size)) · 删除后可从废纸篓恢复")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                .foregroundStyle(.secondary)
             }
+        }
+        .confirmationDialog(
+            "清理 Docker 构建缓存?",
+            isPresented: $viewModel.dockerCleanupPending
+        ) {
+            Button("清理构建缓存", role: .destructive) {
+                viewModel.confirmDockerCacheCleanup()
+            }
+            Button("取消", role: .cancel) {
+                viewModel.cancelDockerCacheCleanup()
+            }
+        } message: {
+            Text("只会删除 Docker 构建缓存，不会停止服务，也不会删除镜像、Volume 或容器。")
         }
     }
 
@@ -189,6 +204,89 @@ struct ContentView: View {
         }
     }
 
+    private var dockerSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Docker", systemImage: "shippingbox.fill")
+                    .font(.headline)
+                if viewModel.dockerUsage != nil {
+                    Text("运行中 · \(viewModel.dockerServices.count) 个服务")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                } else {
+                    Text("未连接")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button {
+                    viewModel.refreshDocker()
+                } label: {
+                    Label("刷新", systemImage: "arrow.clockwise")
+                }
+                .disabled(viewModel.isLoadingDocker || viewModel.isCleaningDocker)
+            }
+
+            if viewModel.isLoadingDocker {
+                ProgressView("正在读取 Docker 状态...")
+                    .progressViewStyle(.linear)
+            } else if let usage = viewModel.dockerUsage {
+                HStack(spacing: 12) {
+                    DockerMetric(title: "镜像", value: CacheFormatter.formatSize(usage.imageSize), detail: "\(usage.imageCount) 个")
+                    DockerMetric(title: "容器", value: CacheFormatter.formatSize(usage.containerSize), detail: "\(usage.containerCount) 个")
+                    DockerMetric(title: "Volume", value: CacheFormatter.formatSize(usage.volumeSize), detail: "\(usage.volumeCount) 个")
+                    DockerMetric(title: "构建缓存", value: CacheFormatter.formatSize(usage.buildCacheSize), detail: "可回收 \(CacheFormatter.formatSize(usage.buildCacheReclaimable))")
+                }
+
+                if viewModel.dockerServices.isEmpty {
+                    Text("当前没有运行中的 Docker 服务")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("运行中的服务")
+                            .font(.subheadline.weight(.medium))
+                        ForEach(viewModel.dockerServices) { service in
+                            HStack {
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 7))
+                                    .foregroundStyle(.green)
+                                Text(service.name)
+                                    .fontWeight(.medium)
+                                Text(service.image)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(service.status)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+
+                HStack {
+                    Text("清理构建缓存可释放约 \(CacheFormatter.formatSize(usage.buildCacheReclaimable))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        viewModel.requestDockerCacheCleanup()
+                    } label: {
+                        Label("清理 Docker 缓存", systemImage: "trash")
+                    }
+                    .disabled(viewModel.isCleaningDocker || usage.buildCacheReclaimable == 0)
+                }
+            } else {
+                Text("Docker Desktop 未运行，或当前无法连接 Docker 引擎")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(.thinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
     private var cacheTable: some View {
         Table(viewModel.caches, selection: $viewModel.selectedCacheIDs) {
             TableColumn("类别") { cache in
@@ -262,7 +360,7 @@ struct ContentView: View {
                     .progressViewStyle(.linear)
             } else if !viewModel.largeFiles.isEmpty {
                 HStack {
-                    Text("共 (viewModel.largeFiles.count) 个文件 · (CacheFormatter.formatSize(viewModel.largeFiles.reduce(0) { $0 + $1.size }) )")
+                    Text("共 \(viewModel.largeFiles.count) 个文件 · \(CacheFormatter.formatSize(viewModel.largeFiles.reduce(0) { $0 + $1.size }))")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
@@ -401,6 +499,29 @@ private struct SummaryCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct DockerMetric: View {
+    let title: String
+    let value: String
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.headline.monospacedDigit())
+            Text(detail)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(.background.opacity(0.45))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
