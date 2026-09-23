@@ -80,7 +80,10 @@ struct ContentView: View {
         } message: { file in
             Text("\(file.name) · \(CacheFormatter.formatSize(file.size))\n删除后可从废纸篓恢复。")
         }
-        .sheet(isPresented: $viewModel.isAIAnalysisPresented) {
+        .sheet(
+            isPresented: $viewModel.isAIAnalysisPresented,
+            onDismiss: { viewModel.cancelAIAnalysis() }
+        ) {
             AIAnalysisView()
                 .environmentObject(viewModel)
         }
@@ -324,6 +327,10 @@ private struct AIAnalysisView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
+                if viewModel.isAnalyzingFile {
+                    Button("取消分析") { viewModel.cancelAIAnalysis() }
+                        .buttonStyle(.bordered)
+                }
                 Button("关闭") { viewModel.isAIAnalysisPresented = false }
             }
 

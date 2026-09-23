@@ -38,6 +38,8 @@ final class CacheViewModel: ObservableObject {
     @Published var isAIAnalysisPresented = false
 
     private let aiConfigurationKey = "ai.model.configuration"
+    private var aiAnalysisTask: Task<Void, Never>?
+    private var aiAnalysisGeneration = UUID()
 
     init() {
         if let data = UserDefaults.standard.data(forKey: aiConfigurationKey),
@@ -247,6 +249,16 @@ final class CacheViewModel: ObservableObject {
         toastMessage = "删除命令已复制"
     }
 
+    func cancelAIAnalysis() {
+        aiAnalysisGeneration = UUID()
+        aiAnalysisTask?.cancel()
+        aiAnalysisTask = nil
+        if isAnalyzingFile {
+            isAnalyzingFile = false
+            toastMessage = "AI 分析已取消"
+        }
+    }
+
     private func analyzeTargets(_ targets: [AIAnalysisTarget]) {
         guard !targets.isEmpty, !isAnalyzingFile else { return }
         isAnalyzingFile = true
@@ -255,21 +267,30 @@ final class CacheViewModel: ObservableObject {
         lastError = nil
 
         let configuration = aiConfiguration
-        Task {
+        let generation = UUID()
+        aiAnalysisGeneration = generation
+        aiAnalysisTask = Task { [weak self] in
+            guard let self else { return }
             let analyzer = AIAnalyzer()
             for target in targets {
+                if Task.isCancelled || self.aiAnalysisGeneration != generation { return }
                 do {
                     let analysis = try await analyzer.analyze(target: target, configuration: configuration)
-                    if let index = self.aiAnalysisItems.firstIndex(where: { $0.id == target.id }) {
+                    if self.aiAnalysisGeneration == generation,
+                       let index = self.aiAnalysisItems.firstIndex(where: { $0.id == target.id }) {
                         self.aiAnalysisItems[index].analysis = analysis
                     }
                 } catch {
+                    if Task.isCancelled || self.aiAnalysisGeneration != generation { return }
                     if let index = self.aiAnalysisItems.firstIndex(where: { $0.id == target.id }) {
                         self.aiAnalysisItems[index].errorMessage = error.localizedDescription
                     }
                 }
             }
-            self.isAnalyzingFile = false
+            if self.aiAnalysisGeneration == generation {
+                self.isAnalyzingFile = false
+                self.aiAnalysisTask = nil
+            }
         }
     }
 
