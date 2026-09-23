@@ -19,6 +19,25 @@ DevCache Cleaner helps developers reclaim disk space without permanently deletin
 - Reveal files in Finder.
 - Move deleted items to Trash instead of permanently removing them.
 - Skip protected system locations, application bundles, and Time Machine data during large-file scans.
+- Separate developer-cache, large-file, and AI settings workspaces.
+- Analyze one or multiple large files or developer-cache entries through an OpenAI-compatible model without uploading file contents.
+- Double-click an entry to start AI analysis, or select multiple entries and analyze them together.
+- Generate a cautious deletion recommendation and a reviewable Trash command with one-click copy.
+
+### AI configuration
+
+The default provider is OpenRouter's free-model router:
+
+- Base URL: `https://openrouter.ai/api/v1`
+- Model: `openrouter/free`
+
+Enter your API key in the app's **AI Settings** page. The key is stored in local macOS user settings and is intentionally not committed to this public repository. A safe configuration template is available at [AIConfiguration.example.json](AIConfiguration.example.json). Never commit a real API key to source code, packages, or releases.
+
+### Screenshots
+
+![Developer cache cleanup](Assets/screenshots/developer-caches.png)
+
+![Large file scanning](Assets/screenshots/large-files.png)
 
 ### Requirements
 
@@ -74,6 +93,25 @@ DevCache Cleaner 帮助开发者释放磁盘空间，同时避免直接永久删
 - 支持在访达中定位文件。
 - 删除内容统一移动到废纸篓，不直接永久删除。
 - 扫描大文件时跳过系统关键目录、应用程序包和 Time Machine 数据。
+- 开发缓存、大文件和 AI 设置分别使用独立页面。
+- 支持通过 OpenAI-compatible 大模型批量分析大文件和开发缓存，不上传文件内容。
+- 双击项目即可开始 AI 分析，也可以多选后批量分析。
+- 给出中文的谨慎删除建议，并支持一键复制废纸篓命令。
+
+### AI 配置
+
+默认使用 OpenRouter 免费模型路由：
+
+- Base URL：`https://openrouter.ai/api/v1`
+- 模型：`openrouter/free`
+
+请在应用的 **AI 设置** 页面填写 API Key。Key 只保存在本机 macOS 用户设置中，不会提交到这个公开仓库。项目提供了安全的配置模板 [AIConfiguration.example.json](AIConfiguration.example.json)，请不要把真实 Key 提交到源码、安装包或 Release。
+
+### 界面截图
+
+![开发缓存清理](Assets/screenshots/developer-caches.png)
+
+![大文件扫描](Assets/screenshots/large-files.png)
 
 ### 系统要求
 

@@ -2,6 +2,14 @@ import Foundation
 import DevCacheCore
 import AppKit
 
+struct AIAnalysisItem: Identifiable {
+    let target: AIAnalysisTarget
+    var analysis: AIFileAnalysis?
+    var errorMessage: String?
+
+    var id: String { target.id }
+}
+
 @MainActor
 final class CacheViewModel: ObservableObject {
     @Published var caches: [CacheInfo] = []
@@ -24,6 +32,21 @@ final class CacheViewModel: ObservableObject {
     @Published var isLoadingDocker = false
     @Published var isCleaningDocker = false
     @Published var dockerCleanupPending = false
+    @Published var aiConfiguration: AIModelConfiguration
+    @Published var isAnalyzingFile = false
+    @Published var aiAnalysisItems: [AIAnalysisItem] = []
+    @Published var isAIAnalysisPresented = false
+
+    private let aiConfigurationKey = "ai.model.configuration"
+
+    init() {
+        if let data = UserDefaults.standard.data(forKey: aiConfigurationKey),
+           let configuration = try? JSONDecoder().decode(AIModelConfiguration.self, from: data) {
+            aiConfiguration = configuration
+        } else {
+            aiConfiguration = AIModelConfiguration()
+        }
+    }
 
     func analyzeAllCaches(preserveSelection: Bool = false) {
         guard !isAnalyzing else { return }
@@ -183,6 +206,71 @@ final class CacheViewModel: ObservableObject {
 
     func revealLargeFile(_ file: LargeFileInfo) {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: file.path)])
+    }
+
+    func saveAIConfiguration() {
+        guard let data = try? JSONEncoder().encode(aiConfiguration) else { return }
+        UserDefaults.standard.set(data, forKey: aiConfigurationKey)
+        toastMessage = "AI 配置已保存"
+    }
+
+    func analyzeSelectedLargeFiles() {
+        let files = largeFiles.filter { selectedLargeFilePaths.contains($0.path) }
+        analyzeLargeFiles(files)
+    }
+
+    func analyzeLargeFile(_ file: LargeFileInfo) {
+        analyzeLargeFiles([file])
+    }
+
+    func analyzeLargeFiles(_ files: [LargeFileInfo]) {
+        analyzeTargets(files.map(AIAnalysisTarget.init(file:)))
+    }
+
+    func analyzeSelectedCaches() {
+        let cachesToAnalyze = caches.filter { selectedCacheIDs.contains($0.id) }
+        analyzeCaches(cachesToAnalyze)
+    }
+
+    func analyzeCache(_ cache: CacheInfo) {
+        analyzeCaches([cache])
+    }
+
+    func analyzeCaches(_ caches: [CacheInfo]) {
+        analyzeTargets(caches.map(AIAnalysisTarget.init(cache:)))
+    }
+
+    func copyDeletionCommand(_ command: String) {
+        guard !command.isEmpty else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(command, forType: .string)
+        toastMessage = "删除命令已复制"
+    }
+
+    private func analyzeTargets(_ targets: [AIAnalysisTarget]) {
+        guard !targets.isEmpty, !isAnalyzingFile else { return }
+        isAnalyzingFile = true
+        aiAnalysisItems = targets.map { AIAnalysisItem(target: $0, analysis: nil, errorMessage: nil) }
+        isAIAnalysisPresented = true
+        lastError = nil
+
+        let configuration = aiConfiguration
+        Task {
+            let analyzer = AIAnalyzer()
+            for target in targets {
+                do {
+                    let analysis = try await analyzer.analyze(target: target, configuration: configuration)
+                    if let index = self.aiAnalysisItems.firstIndex(where: { $0.id == target.id }) {
+                        self.aiAnalysisItems[index].analysis = analysis
+                    }
+                } catch {
+                    if let index = self.aiAnalysisItems.firstIndex(where: { $0.id == target.id }) {
+                        self.aiAnalysisItems[index].errorMessage = error.localizedDescription
+                    }
+                }
+            }
+            self.isAnalyzingFile = false
+        }
     }
 
     func toggleSelection(for cache: CacheInfo) {

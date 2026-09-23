@@ -1,0 +1,5 @@
+{
+  "baseURL": "https://openrouter.ai/api/v1",
+  "model": "openrouter/free",
+  "apiKey": "YOUR_OPENROUTER_API_KEY"
+}

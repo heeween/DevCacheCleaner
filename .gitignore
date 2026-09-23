@@ -5,3 +5,6 @@ DerivedData/
 dist/*.pkg
 dist/*.zip
 .DS_Store
+# Local AI credentials/configuration
+AIConfiguration.json
+Config/AIConfiguration.json

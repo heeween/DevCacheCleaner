@@ -9,6 +9,8 @@ struct DevCacheCleanerApp: App {
             ContentView()
                 .environmentObject(viewModel)
         }
+        .defaultSize(width: 1280, height: 820)
+        .windowResizability(.contentMinSize)
         .windowToolbarStyle(.unified)
     }
 }
