@@ -303,8 +303,28 @@ private struct AISettingsView: View {
                     Text(viewModel.aiConfiguration.isReady ? "配置完整，可以进行 AI 分析" : "请填写 Base URL、模型和 API Key")
                         .foregroundStyle(.secondary)
                     Spacer()
+                    Button {
+                        viewModel.testAIConnection()
+                    } label: {
+                        if viewModel.isTestingAIConnection {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("检测中")
+                        } else {
+                            Label("检测连接", systemImage: "network")
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.aiConfiguration.isReady || viewModel.isTestingAIConnection)
                     Button("保存配置") { viewModel.saveAIConfiguration() }
                         .buttonStyle(.borderedProminent)
+                }
+
+                if let message = viewModel.aiConnectionMessage {
+                    Label(message, systemImage: message.hasPrefix("连接成功") ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(message.hasPrefix("连接成功") ? .green : .orange)
+                        .textSelection(.enabled)
                 }
             }
         }

@@ -23,6 +23,7 @@ DevCache Cleaner helps developers reclaim disk space without permanently deletin
 - Analyze one or multiple large files or developer-cache entries through an OpenAI-compatible model without uploading file contents.
 - Double-click an entry to start AI analysis, or select multiple entries and analyze them together.
 - Generate a cautious deletion recommendation and a reviewable Trash command with one-click copy.
+- Test the configured AI endpoint directly from the AI Settings page.
 
 ### AI configuration
 
@@ -97,6 +98,7 @@ DevCache Cleaner 帮助开发者释放磁盘空间，同时避免直接永久删
 - 支持通过 OpenAI-compatible 大模型批量分析大文件和开发缓存，不上传文件内容。
 - 双击项目即可开始 AI 分析，也可以多选后批量分析。
 - 给出中文的谨慎删除建议，并支持一键复制废纸篓命令。
+- 可在 AI 设置页面直接检测模型连接是否正常。
 
 ### AI 配置
 

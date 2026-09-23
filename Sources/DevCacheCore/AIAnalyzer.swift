@@ -97,6 +97,43 @@ public enum AIAnalyzerError: LocalizedError {
 public final class AIAnalyzer: Sendable {
     public init() {}
 
+    public func testConnection(configuration: AIModelConfiguration) async throws -> String {
+        guard configuration.isReady else { throw AIAnalyzerError.missingAPIKey }
+        guard let baseURL = URL(string: configuration.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            throw AIAnalyzerError.invalidBaseURL
+        }
+
+        let endpoint = baseURL.appendingPathComponent("chat/completions")
+        let body = ConnectionTestRequest(
+            model: configuration.model,
+            temperature: 0,
+            maxTokens: 8,
+            messages: [
+                ChatMessage(role: "system", content: "你是连接测试助手。"),
+                ChatMessage(role: "user", content: "请只回复：连接成功")
+            ]
+        )
+
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 30
+        request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw AIAnalyzerError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let message = String(data: data, encoding: .utf8) ?? "AI 请求失败"
+            throw AIAnalyzerError.requestFailed("AI 请求失败（\(httpResponse.statusCode)）：\(message)")
+        }
+
+        let completion = try JSONDecoder().decode(ChatResponse.self, from: data)
+        return completion.choices.first?.message.content ?? "连接成功"
+    }
+
     public func analyze(file: LargeFileInfo, configuration: AIModelConfiguration) async throws -> AIFileAnalysis {
         try await analyze(target: AIAnalysisTarget(file: file), configuration: configuration)
     }
@@ -170,6 +207,17 @@ private struct ChatRequest: Encodable {
     let model: String
     let temperature: Double
     let messages: [ChatMessage]
+}
+
+private struct ConnectionTestRequest: Encodable {
+    let model: String
+    let temperature: Double
+    let maxTokens: Int
+    let messages: [ChatMessage]
+
+    enum CodingKeys: String, CodingKey {
+        case model, temperature, maxTokens = "max_tokens", messages
+    }
 }
 
 private struct ChatMessage: Codable {

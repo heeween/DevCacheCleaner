@@ -36,6 +36,8 @@ final class CacheViewModel: ObservableObject {
     @Published var isAnalyzingFile = false
     @Published var aiAnalysisItems: [AIAnalysisItem] = []
     @Published var isAIAnalysisPresented = false
+    @Published var isTestingAIConnection = false
+    @Published var aiConnectionMessage: String?
 
     private let aiConfigurationKey = "ai.model.configuration"
     private var aiAnalysisTask: Task<Void, Never>?
@@ -214,6 +216,23 @@ final class CacheViewModel: ObservableObject {
         guard let data = try? JSONEncoder().encode(aiConfiguration) else { return }
         UserDefaults.standard.set(data, forKey: aiConfigurationKey)
         toastMessage = "AI 配置已保存"
+    }
+
+    func testAIConnection() {
+        guard !isTestingAIConnection else { return }
+        isTestingAIConnection = true
+        aiConnectionMessage = "正在检测连接..."
+        let configuration = aiConfiguration
+
+        Task {
+            do {
+                let response = try await AIAnalyzer().testConnection(configuration: configuration)
+                self.aiConnectionMessage = "连接成功：\(response.trimmingCharacters(in: .whitespacesAndNewlines))"
+            } catch {
+                self.aiConnectionMessage = "连接失败：\(error.localizedDescription)"
+            }
+            self.isTestingAIConnection = false
+        }
     }
 
     func analyzeSelectedLargeFiles() {
